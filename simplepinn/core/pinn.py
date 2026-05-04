@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from simplepinn.viz.plot import plot_1d
+
 from .network import MLP
 
 
@@ -114,3 +116,6 @@ class PINN:
             # Logging
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}: loss = {loss.item():.6f}")
+
+    def plot(self, t=0.0):
+        plot_1d(self.model, self.problem, t_value=t)

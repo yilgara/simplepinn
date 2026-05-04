@@ -28,3 +28,5 @@ model = sp.PINN(problem, hidden_layers=4, hidden_units=64)
 model.fit(epochs=2000, lr=1e-3)
 
 print("Training finished.")
+
+model.plot(t=0.5)
