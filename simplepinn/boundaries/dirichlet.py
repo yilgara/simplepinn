@@ -23,9 +23,9 @@ class Dirichlet:
             t.requires_grad_(True)
 
             if edge == "left":
-                x = torch.full((n_points, 1), x_low)
+                x = torch.full((n_points, 1), float(x_low))
             elif edge == "right":
-                x = torch.full((n_points, 1), x_high)
+                x = torch.full((n_points, 1), float(x_high))
             else:
                 raise ValueError(f"Unknown edge: {edge}")
 

@@ -17,7 +17,7 @@ class Function:
         x = torch.rand(n_points, 1) * (x_high - x_low) + x_low
         x.requires_grad_(True)
 
-        t = torch.full((n_points, 1), t_low)
+        t = torch.full((n_points, 1), float(t_low))
         t.requires_grad_(True)
 
         inputs = torch.cat([x, t], dim=1)
