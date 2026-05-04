@@ -115,7 +115,13 @@ class PINN:
 
             # Logging
             if epoch % 100 == 0:
-                print(f"Epoch {epoch}: loss = {loss.item():.6f}")
+                print(
+                    f"Epoch {epoch}: "
+                    f"total={loss.item():.6f} | "
+                    f"pde={loss_pde.item():.6f} | "
+                    f"bc={loss_bc.item():.6f} | "
+                    f"ic={loss_ic.item():.6f}"
+                )
 
     def plot(self, t=0.0):
         plot_1d(self.model, self.problem, t_value=t)
