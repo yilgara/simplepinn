@@ -31,6 +31,9 @@ class PINN:
         )
 
         self.optimizer = None
+        self.lambda_pde = 1.0
+        self.lambda_bc = 1.0
+        self.lambda_ic = 1.0
 
     # --------------------------------------------------
     # SAMPLING
@@ -107,7 +110,11 @@ class PINN:
             loss_bc = self._compute_boundary_loss()
             loss_ic = self._compute_initial_loss()
 
-            loss = loss_pde + loss_bc + loss_ic
+            loss = (
+                self.lambda_pde * loss_pde +
+                self.lambda_bc * loss_bc +
+                self.lambda_ic * loss_ic
+            )
 
             # Backpropagation
             loss.backward()
@@ -118,9 +125,9 @@ class PINN:
                 print(
                     f"Epoch {epoch}: "
                     f"total={loss.item():.6f} | "
-                    f"pde={loss_pde.item():.6f} | "
-                    f"bc={loss_bc.item():.6f} | "
-                    f"ic={loss_ic.item():.6f}"
+                    f"pde={loss_pde.item():.6f} (lambda={self.lambda_pde}) | "
+                    f"bc={loss_bc.item():.6f} (lambda={self.lambda_bc}) | "
+                    f"ic={loss_ic.item():.6f} (lambda={self.lambda_ic})"
                 )
 
     def plot(self, t=0.0):
