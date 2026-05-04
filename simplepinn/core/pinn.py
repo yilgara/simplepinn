@@ -67,6 +67,22 @@ class PINN:
 
         return loss
 
+    def _compute_boundary_loss(self):
+        loss = 0.0
+
+        for boundary in self.problem.boundaries:
+            loss += boundary.loss(self.model, self.problem)
+
+        return loss
+
+    def _compute_initial_loss(self):
+        loss = 0.0
+
+        for initial in self.problem.initials:
+            loss += initial.loss(self.model, self.problem)
+
+        return loss
+
     # --------------------------------------------------
     # TRAINING
     # --------------------------------------------------
@@ -86,8 +102,10 @@ class PINN:
             # Compute PDE loss
             loss_pde = self._compute_pde_loss(coords)
 
-            # Total loss (for now = PDE only)
-            loss = loss_pde
+            loss_bc = self._compute_boundary_loss()
+            loss_ic = self._compute_initial_loss()
+
+            loss = loss_pde + loss_bc + loss_ic
 
             # Backpropagation
             loss.backward()
