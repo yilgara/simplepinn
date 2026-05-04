@@ -1,3 +1,4 @@
+import math
 import torch
 
 from simplepinn.core.problem import Problem
@@ -57,10 +58,7 @@ def solve_heat(
 
         u_pred = model.predict(x, t=t_value)
 
-        u_exact = (
-            torch.exp(torch.tensor(-alpha * torch.pi**2 * t_value))
-            * torch.sin(torch.pi * x)
-        )
+        u_exact = math.exp(-alpha * math.pi**2 * t_value) * torch.sin(math.pi * x)
 
         error = torch.mean(torch.abs(u_pred - u_exact))
 
