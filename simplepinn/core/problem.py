@@ -12,6 +12,18 @@ class Problem:
     """
 
     def __init__(self, domain=None, vars=None, sampler="uniform"):
+        if not isinstance(domain, list):
+            raise ValueError("domain must be a list of tuples")
+
+        if not all(isinstance(bounds, tuple) and len(bounds) == 2 for bounds in domain):
+            raise ValueError("domain entries must be tuples like (low, high)")
+
+        if not isinstance(vars, list):
+            raise ValueError("vars must be a list of variable names")
+
+        if len(vars) != len(domain):
+            raise ValueError("vars must match domain dimensions")
+
         self.domain = domain
         self.vars = vars
         self.sampler = sampler

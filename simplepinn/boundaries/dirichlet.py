@@ -8,6 +8,9 @@ class Dirichlet:
     """
 
     def __init__(self, edges=None, value=0.0):
+        if not edges:
+            raise ValueError("Dirichlet boundary requires edges=['left', 'right']")
+
         self.edges = edges or []
         self.value = value
 

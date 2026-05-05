@@ -19,6 +19,8 @@ class PINN:
 
     def __init__(self, problem, hidden_layers=4, hidden_units=64):
         self.problem = problem
+        self.hidden_layers = hidden_layers
+        self.hidden_units = hidden_units
 
         # Input dimension = number of variables (e.g. x, t → 2)
         input_dim = len(problem.vars)
@@ -34,6 +36,31 @@ class PINN:
         self.lambda_pde = 1.0
         self.lambda_bc = 1.0
         self.lambda_ic = 1.0
+
+    def _format_domain(self):
+        return " x ".join(f"[{low},{high}]" for low, high in self.problem.domain)
+
+    def _class_names(self, items):
+        if not items:
+            return "None"
+
+        return ", ".join(item.__class__.__name__ for item in items)
+
+    def _equation_name(self):
+        if not self.problem.pdes:
+            return "None"
+
+        return self.problem.pdes[0].__class__.__name__
+
+    def summary(self):
+        print("PINN Summary:")
+        print(f"- Equation: {self._equation_name()}")
+        print(f"- Domain: {self.problem.domain}")
+        print(f"- Variables: {self.problem.vars}")
+        print(f"- Network: {self.hidden_layers} layers, {self.hidden_units} units")
+
+        total_params = sum(p.numel() for p in self.model.parameters())
+        print(f"- Parameters: {total_params}")
 
     # --------------------------------------------------
     # SAMPLING
@@ -98,6 +125,12 @@ class PINN:
         """
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
+        print("\n=== Training PINN ===")
+        print(f"PDE: {self._equation_name()}")
+        print(f"Domain: {self.problem.domain}")
+        print(f"Samples: {n_pde}")
+        print("====================\n")
+
         for epoch in range(epochs):
             self.optimizer.zero_grad()
 
@@ -132,3 +165,19 @@ class PINN:
 
     def plot(self, t=0.0):
         plot_1d(self.model, self.problem, t_value=t)
+
+    def predict(self, x, t=0.0):
+        x = torch.as_tensor(x, dtype=torch.float32).reshape(-1, 1)
+        t = torch.full_like(x, float(t))
+        inputs = torch.cat([x, t], dim=1)
+
+        was_training = self.model.training
+        self.model.eval()
+
+        with torch.no_grad():
+            u = self.model(inputs)
+
+        if was_training:
+            self.model.train()
+
+        return u

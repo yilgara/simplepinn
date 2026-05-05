@@ -1,8 +1,9 @@
 import torch
 from simplepinn.core.grad import grad
+from simplepinn.equations.base import BaseEquation
 
 
-class HeatEquation:
+class HeatEquation(BaseEquation):
     """
     Heat equation:
         u_t = alpha * u_xx
