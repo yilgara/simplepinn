@@ -306,7 +306,7 @@ and tutorials. See [CONTRIBUTING.md](CONTRIBUTING.md).
 ```bibtex
 @software{simplepinn,
   title  = {simplepinn: Beginner-friendly Physics-Informed Neural Networks in PyTorch},
-  author = {Pedro and contributors},
+  author = {Mohammad Asghari and Contribution},
   year   = {2026},
   url    = {https://github.com/yilgara/simplepinn}
 }
