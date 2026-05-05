@@ -36,6 +36,13 @@ class PINN:
         self.lambda_pde = 1.0
         self.lambda_bc = 1.0
         self.lambda_ic = 1.0
+        self.history = {
+            "epoch": [],
+            "total": [],
+            "pde": [],
+            "bc": [],
+            "ic": [],
+        }
 
     def _format_domain(self):
         return " x ".join(f"[{low},{high}]" for low, high in self.problem.domain)
@@ -119,11 +126,18 @@ class PINN:
     # TRAINING
     # --------------------------------------------------
 
-    def fit(self, epochs=1000, lr=1e-3, n_pde=1000):
+    def fit(self, epochs=1000, lr=1e-3, n_pde=1000, progress_callback=None):
         """
         Train the PINN model.
         """
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        self.history = {
+            "epoch": [],
+            "total": [],
+            "pde": [],
+            "bc": [],
+            "ic": [],
+        }
 
         print("\n=== Training PINN ===")
         print(f"PDE: {self._equation_name()}")
@@ -152,6 +166,15 @@ class PINN:
             # Backpropagation
             loss.backward()
             self.optimizer.step()
+
+            self.history["epoch"].append(epoch)
+            self.history["total"].append(loss.item())
+            self.history["pde"].append(loss_pde.item())
+            self.history["bc"].append(loss_bc.item())
+            self.history["ic"].append(loss_ic.item())
+
+            if progress_callback and epoch % max(1, epochs // 100) == 0:
+                progress_callback(epoch, epochs, self.history)
 
             # Logging
             if epoch % 100 == 0:
