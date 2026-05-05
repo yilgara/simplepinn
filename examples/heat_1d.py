@@ -32,23 +32,16 @@ print("Training finished.")
 
 # --- Compare with analytical solution ---
 def exact_solution(x, t, alpha=0.01):
-    return np.exp(-np.pi**2 * alpha * t) * np.sin(np.pi * x)
+    return torch.exp(torch.tensor(-np.pi**2 * alpha * t)) * torch.sin(torch.pi * x)
 
 
 # Generate test points
-x = np.linspace(0, 1, 200).reshape(-1, 1)
-t = np.full_like(x, 0.5)
+x = torch.linspace(0, 1, 200).reshape(-1, 1)
 
-inputs = torch.tensor(np.hstack([x, t]), dtype=torch.float32)
+u_pred = model.predict(x, t=0.5)
+u_exact = exact_solution(x, t=0.5)
 
-with torch.no_grad():
-    u_pred = model.model(inputs).cpu().numpy()
-
-u_exact = exact_solution(x, 0.5)
-
-# Compute error
-error = np.mean(np.abs(u_pred - u_exact))
-
-print(f"\nMean absolute error vs analytical solution: {error:.6f}")
+error = torch.mean(torch.abs(u_pred - u_exact))
+print("Error:", error.item())
 
 model.plot(t=0.5)
