@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+from simplepinn.samplers import AdaptiveSampler, LatinHypercubeSampler, UniformSampler
 from simplepinn.viz.plot import plot_1d
 
 from .network import MLP
@@ -36,12 +37,14 @@ class PINN:
         self.lambda_pde = 1.0
         self.lambda_bc = 1.0
         self.lambda_ic = 1.0
+        self.lambda_data = 1.0
         self.history = {
             "epoch": [],
             "total": [],
             "pde": [],
             "bc": [],
             "ic": [],
+            "data": [],
         }
 
     def _format_domain(self):
@@ -75,20 +78,34 @@ class PINN:
 
     def _sample_interior(self, n_points):
         """
-        Uniform sampling inside the domain.
+        Sampling inside the domain.
         Returns dict: {"x": tensor, "t": tensor}
         """
-        coords = {}
+        samplers = {
+            "uniform": UniformSampler,
+            "latin_hypercube": LatinHypercubeSampler,
+            "adaptive": AdaptiveSampler,
+        }
 
-        for i, (low, high) in enumerate(self.problem.domain):
-            var_name = self.problem.vars[i]
+        sampler = self.problem.sampler
 
-            x = torch.rand(n_points, 1) * (high - low) + low
-            x.requires_grad_(True)
+        if isinstance(sampler, str):
+            if sampler not in samplers:
+                raise ValueError(
+                    "Unknown sampler. Choose 'uniform', 'latin_hypercube', or 'adaptive'."
+                )
 
-            coords[var_name] = x
+            sampler = samplers[sampler]()
 
-        return coords
+        return sampler.sample(self.problem.domain, self.problem.vars, n_points)
+
+    def _build_inputs(self, *values):
+        tensors = [
+            torch.as_tensor(value, dtype=torch.float32).reshape(-1, 1)
+            for value in values
+        ]
+        return torch.cat(tensors, dim=1)
+
 
     # --------------------------------------------------
     # PDE LOSS
@@ -98,7 +115,7 @@ class PINN:
         """
         Computes total PDE loss across all equations.
         """
-        loss = 0.0
+        loss = torch.tensor(0.0)
 
         for pde in self.problem.pdes:
             residual = pde.residual(self.model, coords)
@@ -107,7 +124,7 @@ class PINN:
         return loss
 
     def _compute_boundary_loss(self):
-        loss = 0.0
+        loss = torch.tensor(0.0)
 
         for boundary in self.problem.boundaries:
             loss += boundary.loss(self.model, self.problem)
@@ -115,18 +132,71 @@ class PINN:
         return loss
 
     def _compute_initial_loss(self):
-        loss = 0.0
+        loss = torch.tensor(0.0)
 
         for initial in self.problem.initials:
             loss += initial.loss(self.model, self.problem)
 
         return loss
 
+    def _compute_data_loss(self):
+        loss = torch.tensor(0.0)
+
+        for data in self.problem.data:
+            if len(data) == 2:
+                inputs, target = data
+                inputs = torch.as_tensor(inputs, dtype=torch.float32)
+                target = torch.as_tensor(target, dtype=torch.float32).reshape(-1, 1)
+            elif len(data) == 3:
+                x, t, target = data
+                inputs = self._build_inputs(x, t)
+                target = torch.as_tensor(target, dtype=torch.float32).reshape(-1, 1)
+            else:
+                raise ValueError("data constraints must be (inputs, target) or (x, t, target)")
+
+            prediction = self.model(inputs)
+            loss += torch.mean((prediction - target) ** 2)
+
+        return loss
+
+    def _loss_weights(self, loss_pde, loss_bc, loss_ic, loss_data, auto_weight):
+        if not auto_weight:
+            return (
+                self.lambda_pde,
+                self.lambda_bc,
+                self.lambda_ic,
+                self.lambda_data,
+            )
+
+        losses = [loss_pde, loss_bc, loss_ic, loss_data]
+        active = [loss.detach() for loss in losses if loss.detach().item() > 0.0]
+
+        if not active:
+            return 1.0, 1.0, 1.0, 1.0
+
+        mean_loss = torch.stack(active).mean()
+
+        weights = []
+        for loss in losses:
+            if loss.detach().item() == 0.0:
+                weights.append(0.0)
+            else:
+                weights.append((mean_loss / (loss.detach() + 1e-8)).item())
+
+        return tuple(weights)
+
     # --------------------------------------------------
     # TRAINING
     # --------------------------------------------------
 
-    def fit(self, epochs=1000, lr=1e-3, n_pde=1000, progress_callback=None):
+    def fit(
+        self,
+        epochs=1000,
+        lr=1e-3,
+        n_pde=1000,
+        progress_callback=None,
+        auto_weight=False,
+    ):
         """
         Train the PINN model.
         """
@@ -137,6 +207,7 @@ class PINN:
             "pde": [],
             "bc": [],
             "ic": [],
+            "data": [],
         }
 
         print("\n=== Training PINN ===")
@@ -156,11 +227,20 @@ class PINN:
 
             loss_bc = self._compute_boundary_loss()
             loss_ic = self._compute_initial_loss()
+            loss_data = self._compute_data_loss()
+            weight_pde, weight_bc, weight_ic, weight_data = self._loss_weights(
+                loss_pde,
+                loss_bc,
+                loss_ic,
+                loss_data,
+                auto_weight,
+            )
 
             loss = (
-                self.lambda_pde * loss_pde +
-                self.lambda_bc * loss_bc +
-                self.lambda_ic * loss_ic
+                weight_pde * loss_pde +
+                weight_bc * loss_bc +
+                weight_ic * loss_ic +
+                weight_data * loss_data
             )
 
             # Backpropagation
@@ -172,6 +252,7 @@ class PINN:
             self.history["pde"].append(loss_pde.item())
             self.history["bc"].append(loss_bc.item())
             self.history["ic"].append(loss_ic.item())
+            self.history["data"].append(loss_data.item())
 
             if progress_callback and epoch % max(1, epochs // 100) == 0:
                 progress_callback(epoch, epochs, self.history)
@@ -181,9 +262,10 @@ class PINN:
                 print(
                     f"Epoch {epoch}: "
                     f"total={loss.item():.6f} | "
-                    f"pde={loss_pde.item():.6f} (lambda={self.lambda_pde}) | "
-                    f"bc={loss_bc.item():.6f} (lambda={self.lambda_bc}) | "
-                    f"ic={loss_ic.item():.6f} (lambda={self.lambda_ic})"
+                    f"pde={loss_pde.item():.6f} (lambda={weight_pde}) | "
+                    f"bc={loss_bc.item():.6f} (lambda={weight_bc}) | "
+                    f"ic={loss_ic.item():.6f} (lambda={weight_ic}) | "
+                    f"data={loss_data.item():.6f} (lambda={weight_data})"
                 )
 
     def plot(self, t=0.0):
@@ -191,8 +273,12 @@ class PINN:
 
     def predict(self, x, t=0.0):
         x = torch.as_tensor(x, dtype=torch.float32).reshape(-1, 1)
-        t = torch.full_like(x, float(t))
-        inputs = torch.cat([x, t], dim=1)
+
+        if len(self.problem.vars) == 1:
+            inputs = x
+        else:
+            t = torch.full_like(x, float(t))
+            inputs = torch.cat([x, t], dim=1)
 
         was_training = self.model.training
         self.model.eval()

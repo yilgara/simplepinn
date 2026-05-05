@@ -3,7 +3,7 @@ import torch
 
 from simplepinn.core.problem import Problem
 from simplepinn.core.pinn import PINN
-from simplepinn.equations import HeatEquation
+from simplepinn.equations import BurgersEquation, HeatEquation
 from simplepinn.boundaries import Dirichlet, Function
 
 
@@ -19,6 +19,8 @@ def solve_heat(
     lr=1e-3,
     n_pde=1000,
     compute_error=True,
+    progress_callback=None,
+    auto_weight=False,
 ):
     problem = Problem(
         domain=[domain, time],
@@ -50,7 +52,13 @@ def solve_heat(
     )
 
     model.summary()
-    model.fit(epochs=epochs, lr=lr, n_pde=n_pde)
+    model.fit(
+        epochs=epochs,
+        lr=lr,
+        n_pde=n_pde,
+        progress_callback=progress_callback,
+        auto_weight=auto_weight,
+    )
 
     if compute_error and initial == "sin" and boundary == "zero":
         x = torch.linspace(domain[0], domain[1], 200).reshape(-1, 1)
@@ -67,16 +75,75 @@ def solve_heat(
     return model
 
 
+def solve_burgers(
+    nu=0.1,
+    domain=(0, 1),
+    time=(0, 1),
+    initial="sin",
+    boundary="zero",
+    hidden_layers=4,
+    hidden_units=64,
+    epochs=2000,
+    lr=1e-3,
+    n_pde=1000,
+    progress_callback=None,
+    auto_weight=False,
+):
+    problem = Problem(
+        domain=[domain, time],
+        vars=["x", "t"]
+    )
+
+    problem.add_pde(BurgersEquation(nu=nu))
+
+    if boundary == "zero":
+        problem.add_boundary(
+            Dirichlet(edges=["left", "right"], value=0.0)
+        )
+    else:
+        raise ValueError("Only boundary='zero' is currently supported.")
+
+    if initial == "sin":
+        problem.add_initial(
+            Function(lambda x: torch.sin(torch.pi * x))
+        )
+    elif callable(initial):
+        problem.add_initial(Function(initial))
+    else:
+        raise ValueError("initial must be 'sin' or a callable function.")
+
+    model = PINN(
+        problem,
+        hidden_layers=hidden_layers,
+        hidden_units=hidden_units
+    )
+
+    model.summary()
+    model.fit(
+        epochs=epochs,
+        lr=lr,
+        n_pde=n_pde,
+        progress_callback=progress_callback,
+        auto_weight=auto_weight,
+    )
+
+    return model
+
+
 def solve(
     equation,
     **kwargs
 ):
+    equation = equation.lower()
+
     if equation == "heat":
         return solve_heat(**kwargs)
 
     elif equation == "burgers":
-        from simplepinn.equations import BurgersEquation
-        raise NotImplementedError("Burgers preset not added yet")
+        return solve_burgers(**kwargs)
+
+    elif equation == "poisson":
+        raise NotImplementedError("Poisson preset not added yet")
 
     else:
         raise ValueError(f"Unknown equation: {equation}")

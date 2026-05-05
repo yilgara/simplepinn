@@ -12,6 +12,12 @@ class Problem:
     """
 
     def __init__(self, domain=None, vars=None, sampler="uniform"):
+        if domain is None:
+            domain = [(0, 1), (0, 1)]
+
+        if vars is None:
+            vars = ["x", "t"]
+
         if not isinstance(domain, list):
             raise ValueError("domain must be a list of tuples")
 

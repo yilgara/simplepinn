@@ -8,10 +8,13 @@ class Dirichlet:
     """
 
     def __init__(self, edges=None, value=0.0):
+        if edges is None:
+            edges = ["left", "right"]
+
         if not edges:
             raise ValueError("Dirichlet boundary requires edges=['left', 'right']")
 
-        self.edges = edges or []
+        self.edges = edges
         self.value = value
 
     def loss(self, model, problem, n_points=100):
