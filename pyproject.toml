@@ -18,7 +18,17 @@ dependencies = [
 gui = [
     "gradio>=6.0"
 ]
+dev = [
+    "pytest>=8.0"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["simplepinn*"]
+
+[tool.pytest.ini_options]
+norecursedirs = [
+    ".git",
+    ".pytest_cache",
+    "pytest-cache-files-*",
+]

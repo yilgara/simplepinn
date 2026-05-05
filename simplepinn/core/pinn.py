@@ -70,7 +70,22 @@ class PINN:
         print(f"- Network: {self.hidden_layers} layers, {self.hidden_units} units")
 
         total_params = sum(p.numel() for p in self.model.parameters())
-        print(f"- Parameters: {total_params}")
+        physics_params = sum(p.numel() for p in self._physics_parameters())
+        print(f"- Network parameters: {total_params}")
+        print(f"- Physics parameters: {physics_params}")
+
+    def _physics_parameters(self):
+        params = []
+
+        for item in [*self.problem.pdes, *self.problem.boundaries, *self.problem.initials]:
+            for value in vars(item).values():
+                if isinstance(value, nn.Parameter) and value.requires_grad:
+                    params.append(value)
+
+        return params
+
+    def _trainable_parameters(self):
+        return [*self.model.parameters(), *self._physics_parameters()]
 
     # --------------------------------------------------
     # SAMPLING
@@ -200,7 +215,7 @@ class PINN:
         """
         Train the PINN model.
         """
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        self.optimizer = torch.optim.Adam(self._trainable_parameters(), lr=lr)
         self.history = {
             "epoch": [],
             "total": [],
